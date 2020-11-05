@@ -61,7 +61,6 @@ class TusFile:
         self.metadata = cache.get("tus-uploads/{}/metadata".format(resource_id))
         self.offset = cache.get("tus-uploads/{}/offset".format(resource_id))
 
-
     @staticmethod
     def create_initial_file(metadata, file_size):
         resource_id = str(uuid.uuid4())
@@ -107,7 +106,7 @@ class TusFile:
         ])
 
     def _write_file(self, path, offset, content):
-        with open(path, "wb") as f:
+        with open(path, "r+b") as f:
             outfile = File(f)
             outfile.seek(offset)
             outfile.write(content)
@@ -118,7 +117,10 @@ class TusFile:
 
     def write_init_file(self):
         try:
-            self._write_file(self.get_path(), self.file_size, b"\0")
+            with open(self.get_path(), "wb") as f:
+                outfile = File(f)
+                outfile.seek(offset)
+                outfile.write(b"\0")
         except IOError as e:
             error_message = "Unable to create file: {}".format(e)
             logger.error(error_message, exc_info=True)
