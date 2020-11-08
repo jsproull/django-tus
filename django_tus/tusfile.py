@@ -110,11 +110,16 @@ class TusFile:
         elif setting == "increment":
             self.filename = FilenameGenerator(self.filename).create_incremented_name()
         else:
-            return ValueError()
+            return TusResponse(
+                status=409,
+                reason="Incorrect TUS_FILE_NAME_FORMAT setting: %s" % (setting),
+            )
 
         os.rename(
             self.get_path(), os.path.join(settings.TUS_DESTINATION_DIR, self.filename)
         )
+
+        return TusResponse(status=200)
 
     def clean(self):
         cache.delete_many(
