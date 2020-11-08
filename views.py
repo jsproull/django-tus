@@ -28,7 +28,7 @@ class TusUpload(View):
         if not self.request.META.get("HTTP_TUS_RESUMABLE"):
             return TusResponse(status=405, content="Method Not Allowed")
 
-        override_method = self.request.META.get("HTTP_X_HTTP_METHOD_OVERRIDE")
+        override_method = self.request.META.get('HTTP_X_HTTP_METHOD_OVERRIDE')
         if override_method:
             self.request.method = override_method
 
@@ -66,27 +66,16 @@ class TusUpload(View):
         if message_id:
             metadata["message_id"] = base64.b64decode(message_id)
 
-        if (
-            settings.TUS_EXISTING_FILE == "error"
-            and settings.TUS_FILE_NAME_FORMAT == "keep"
-            and TusFile.check_existing_file(metadata.get("filename"))
-        ):
+        if settings.TUS_EXISTING_FILE == 'error' and settings.TUS_FILE_NAME_FORMAT == 'keep' and TusFile.check_existing_file(metadata.get("filename")):
             return TusResponse(status=409, reason="File with same name already exists")
 
-        file_size = int(
-            request.META.get("HTTP_UPLOAD_LENGTH", "0")
-        )  # TODO: check min max upload size
+        file_size = int(request.META.get("HTTP_UPLOAD_LENGTH", "0"))  # TODO: check min max upload size
 
         tus_file = TusFile.create_initial_file(metadata, file_size)
 
         return TusResponse(
             status=201,
-            extra_headers={
-                "Location": "{}{}".format(
-                    request.build_absolute_uri(), tus_file.resource_id
-                )
-            },
-        )
+            extra_headers={'Location': '{}{}'.format(request.build_absolute_uri(), tus_file.resource_id)})
 
     def head(self, request, resource_id):
 
@@ -98,10 +87,10 @@ class TusUpload(View):
         if offset is None:
             return TusResponse(status=404)
 
-        return TusResponse(
-            status=200,
-            extra_headers={"Upload-Offset": offset, "Upload-Length": file_size},
-        )
+        return TusResponse(status=200,
+                           extra_headers={
+                               'Upload-Offset': offset,
+                               'Upload-Length': file_size})
 
     def patch(self, request, resource_id, *args, **kwargs):
 
@@ -121,16 +110,13 @@ class TusUpload(View):
 
         if tus_file.is_complete():
             # file transfer complete, rename from resource id to actual filename
-            response = tus_file.rename()
-            if response.status_code != 200:
-                return response
-
+            tus_file.rename()
             tus_file.clean()
 
             self.send_signal(tus_file)
             self.finished()
 
-        return TusResponse(status=204, extra_headers={"Upload-Offset": tus_file.offset})
+        return TusResponse(status=204, extra_headers={'Upload-Offset': tus_file.offset})
 
     def send_signal(self, tus_file):
         tus_upload_finished_signal.send(
@@ -140,11 +126,12 @@ class TusUpload(View):
             upload_file_path=tus_file.get_path(),
             file_size=tus_file.file_size,
             upload_url=settings.TUS_UPLOAD_URL,
-            destination_folder=settings.TUS_DESTINATION_DIR,
-        )
+            destination_folder=settings.TUS_DESTINATION_DIR)
 
     def validate_filename(self, metadata):
         filename = metadata.get("filename", "")
         if not is_valid_filename(filename):
             filename = FilenameGenerator.random_string(16)
         return filename
+
+

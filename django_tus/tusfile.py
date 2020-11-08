@@ -36,21 +36,22 @@ class FilenameGenerator:
     @classmethod
     def random_string(cls, length: int = 11) -> str:
         letters_and_digits = string.ascii_letters + string.digits
-        return''.join((random.choice(letters_and_digits) for i in range(length)))
+        return "".join((random.choice(letters_and_digits) for i in range(length)))
 
     def create_incremented_name(self) -> str:
         index = 1
         name, extension = self.get_name_and_extension()
         while True:
-            filename = '{}.{:04d}{}'.format(name, index, extension)
+            filename = "{}.{:04d}{}".format(name, index, extension)
             index += 1
-            if not os.path.lexists(os.path.join(settings.TUS_DESTINATION_DIR, filename)):
+            if not os.path.lexists(
+                os.path.join(settings.TUS_DESTINATION_DIR, filename)
+            ):
                 break
         return filename
 
 
 class TusFile:
-
     def get_storage(self):
         return FileSystemStorage()
 
@@ -61,14 +62,25 @@ class TusFile:
         self.metadata = cache.get("tus-uploads/{}/metadata".format(resource_id))
         self.offset = cache.get("tus-uploads/{}/offset".format(resource_id))
 
-
     @staticmethod
     def create_initial_file(metadata, file_size):
         resource_id = str(uuid.uuid4())
-        cache.add("tus-uploads/{}/filename".format(resource_id), "{}".format(metadata.get("filename")), settings.TUS_TIMEOUT)
-        cache.add("tus-uploads/{}/file_size".format(resource_id), file_size, settings.TUS_TIMEOUT)
+        cache.add(
+            "tus-uploads/{}/filename".format(resource_id),
+            "{}".format(metadata.get("filename")),
+            settings.TUS_TIMEOUT,
+        )
+        cache.add(
+            "tus-uploads/{}/file_size".format(resource_id),
+            file_size,
+            settings.TUS_TIMEOUT,
+        )
         cache.add("tus-uploads/{}/offset".format(resource_id), 0, settings.TUS_TIMEOUT)
-        cache.add("tus-uploads/{}/metadata".format(resource_id), metadata, settings.TUS_TIMEOUT)
+        cache.add(
+            "tus-uploads/{}/metadata".format(resource_id),
+            metadata,
+            settings.TUS_TIMEOUT,
+        )
 
         tus_file = TusFile(resource_id)
         tus_file.write_init_file()
@@ -84,37 +96,53 @@ class TusFile:
 
         setting = settings.TUS_FILE_NAME_FORMAT
 
-        if setting == 'keep':
-            if self.check_existing_file(self.filename):
-                return TusResponse(status=409, reason="File with same name already exists")
-        elif setting == 'random':
+        if setting == "keep":
+            if TusFile.check_existing_file(self.filename):
+                return TusResponse(
+                    status=409, reason="File with same name already exists"
+                )
+        if setting == "replace":
+            TusFile.remove_existing_file(self.filename)
+        elif setting == "random":
             self.filename = FilenameGenerator(self.filename).create_random_name()
-        elif setting == 'random-suffix':
+        elif setting == "random-suffix":
             self.filename = FilenameGenerator(self.filename).create_random_suffix_name()
-        elif setting == 'increment':
+        elif setting == "increment":
             self.filename = FilenameGenerator(self.filename).create_incremented_name()
         else:
             return ValueError()
 
-        os.rename(self.get_path(), os.path.join(settings.TUS_DESTINATION_DIR, self.filename))
+        os.rename(
+            self.get_path(), os.path.join(settings.TUS_DESTINATION_DIR, self.filename)
+        )
 
     def clean(self):
-        cache.delete_many([
-            "tus-uploads/{}/file_size".format(self.resource_id),
-            "tus-uploads/{}/filename".format(self.resource_id),
-            "tus-uploads/{}/offset".format(self.resource_id),
-            "tus-uploads/{}/metadata".format(self.resource_id),
-        ])
+        cache.delete_many(
+            [
+                "tus-uploads/{}/file_size".format(self.resource_id),
+                "tus-uploads/{}/filename".format(self.resource_id),
+                "tus-uploads/{}/offset".format(self.resource_id),
+                "tus-uploads/{}/metadata".format(self.resource_id),
+            ]
+        )
 
     @staticmethod
     def check_existing_file(filename: str):
         return os.path.lexists(os.path.join(settings.TUS_DESTINATION_DIR, filename))
 
+    @staticmethod
+    def remove_existing_file(filename: str):
+        if TusFile.check_existing_file(filename):
+            os.remove(os.path.join(settings.TUS_DESTINATION_DIR, filename))
+
     def write_init_file(self):
+        os.mkdirs(settings.TUS_DESTINATION_DIR, existsOk=True)
+        os.mkdirs(settings.TUS_UPLOAD_DIR, existsOk=True)
+
         try:
-            with open(self.get_path(), 'wb') as f:
+            with open(self.get_path(), "wb") as f:
                 f.seek(self.file_size - 1)
-                f.write(b'\0')
+                f.write(b"\0")
         except IOError as e:
             error_message = "Unable to create file: {}".format(e)
             logger.error(error_message, exc_info=True)
@@ -122,20 +150,28 @@ class TusFile:
 
     def write_chunk(self, chunk):
         try:
-            with open(self.get_path(), 'r+b') as f:
+            with open(self.get_path(), "r+b") as f:
                 f.seek(chunk.offset)
                 f.write(chunk.content)
-            self.offset = cache.incr("tus-uploads/{}/offset".format(self.resource_id), chunk.chunk_size)
+            self.offset = cache.incr(
+                "tus-uploads/{}/offset".format(self.resource_id), chunk.chunk_size
+            )
 
         except IOError:
-            logger.error("patch", extra={'request': chunk.META, 'tus': {
-                "resource_id": self.resource_id,
-                "filename": self.filename,
-                "file_size": self.file_size,
-                "metadata": self.metadata,
-                "offset": self.offset,
-                "upload_file_path": self.get_path(),
-            }})
+            logger.error(
+                "patch",
+                extra={
+                    "request": chunk.META,
+                    "tus": {
+                        "resource_id": self.resource_id,
+                        "filename": self.filename,
+                        "file_size": self.file_size,
+                        "metadata": self.metadata,
+                        "offset": self.offset,
+                        "upload_file_path": self.get_path(),
+                    },
+                },
+            )
             return TusResponse(status=500)
 
     def is_complete(self):
@@ -146,7 +182,6 @@ class TusFile:
 
 
 class TusInitFile:
-
     def __init__(self, offset, chunk_size, content):
         self.offset = offset
         self.chunk_size = chunk_size
