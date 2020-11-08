@@ -136,8 +136,8 @@ class TusFile:
             os.remove(os.path.join(settings.TUS_DESTINATION_DIR, filename))
 
     def write_init_file(self):
-        os.mkdirs(settings.TUS_DESTINATION_DIR, existsOk=True)
-        os.mkdirs(settings.TUS_UPLOAD_DIR, existsOk=True)
+        os.makedirs(settings.TUS_DESTINATION_DIR, exist_ok=True)
+        os.makedirs(settings.TUS_UPLOAD_DIR, exist_ok=True)
 
         try:
             with open(self.get_path(), "wb") as f:
